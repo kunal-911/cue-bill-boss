@@ -52,6 +52,12 @@ export default {
 					DEFAULT: 'hsl(var(--card))',
 					foreground: 'hsl(var(--card-foreground))'
 				},
+				billiards: {
+					felt: 'hsl(var(--billiards-felt))',
+					wood: 'hsl(var(--billiards-wood))',
+					gold: 'hsl(var(--billiards-gold))',
+					leather: 'hsl(var(--billiards-leather))'
+				},
 				sidebar: {
 					DEFAULT: 'hsl(var(--sidebar-background))',
 					foreground: 'hsl(var(--sidebar-foreground))',
