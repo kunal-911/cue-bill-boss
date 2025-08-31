@@ -1,21 +1,43 @@
 import { useState, useEffect } from "react";
 import { Header } from "@/components/Header";
-import { TableCard, Table } from "@/components/TableCard";
+import { TableCard } from "@/components/TableCard";
 import { BillingOverview } from "@/components/BillingOverview";
+import { FoodMenu } from "@/components/FoodMenu";
+import { BillingHistory } from "@/components/BillingHistory";
 import { toast } from "@/hooks/use-toast";
+import { Table, MenuItem, Order, BillingRecord } from "@/types";
+import { menuItems } from "@/data/menuItems";
 import heroImage from "@/assets/billiards-hero.jpg";
 
 const Index = () => {
   const [tables, setTables] = useState<Table[]>([
-    { id: 1, status: 'available', hourlyRate: 25 },
-    { id: 2, status: 'available', hourlyRate: 25 },
-    { id: 3, status: 'available', hourlyRate: 30 },
-    { id: 4, status: 'available', hourlyRate: 30 },
-    { id: 5, status: 'available', hourlyRate: 35 },
-    { id: 6, status: 'available', hourlyRate: 35 },
-    { id: 7, status: 'available', hourlyRate: 40 },
-    { id: 8, status: 'available', hourlyRate: 40 },
+    { id: 1, status: 'available', hourlyRate: 25, orders: [] },
+    { id: 2, status: 'available', hourlyRate: 25, orders: [] },
+    { id: 3, status: 'available', hourlyRate: 30, orders: [] },
+    { id: 4, status: 'available', hourlyRate: 30, orders: [] },
+    { id: 5, status: 'available', hourlyRate: 35, orders: [] },
+    { id: 6, status: 'available', hourlyRate: 35, orders: [] },
+    { id: 7, status: 'available', hourlyRate: 40, orders: [] },
+    { id: 8, status: 'available', hourlyRate: 40, orders: [] },
   ]);
+
+  const [billingHistory, setBillingHistory] = useState<BillingRecord[]>(() => {
+    const saved = localStorage.getItem('billingHistory');
+    return saved ? JSON.parse(saved, (key, value) => {
+      if (key === 'startTime' || key === 'endTime' || key === 'timestamp') {
+        return new Date(value);
+      }
+      if (key === 'timestamp' && value) {
+        return new Date(value);
+      }
+      return value;
+    }) : [];
+  });
+
+  // Save billing history to localStorage
+  useEffect(() => {
+    localStorage.setItem('billingHistory', JSON.stringify(billingHistory));
+  }, [billingHistory]);
 
   // Update bills every second for occupied tables
   useEffect(() => {
@@ -24,7 +46,10 @@ const Index = () => {
         prevTables.map(table => {
           if (table.status === 'occupied' && table.startTime) {
             const hoursPlayed = (new Date().getTime() - table.startTime.getTime()) / (1000 * 60 * 60);
-            return { ...table, currentBill: hoursPlayed * table.hourlyRate };
+            const tableCost = hoursPlayed * table.hourlyRate;
+            const ordersCost = table.orders?.reduce((sum, order) => 
+              sum + (order.menuItem.price * order.quantity), 0) || 0;
+            return { ...table, currentBill: tableCost + ordersCost };
           }
           return table;
         })
@@ -37,7 +62,7 @@ const Index = () => {
   const handleStartGame = (tableId: number, playerName: string) => {
     setTables(prev => prev.map(table => 
       table.id === tableId 
-        ? { ...table, status: 'occupied' as const, player: playerName, startTime: new Date() }
+        ? { ...table, status: 'occupied' as const, player: playerName, startTime: new Date(), orders: [] }
         : table
     ));
     
@@ -49,19 +74,41 @@ const Index = () => {
 
   const handleEndGame = (tableId: number) => {
     const table = tables.find(t => t.id === tableId);
-    if (table && table.startTime) {
-      const hoursPlayed = (new Date().getTime() - table.startTime.getTime()) / (1000 * 60 * 60);
-      const finalBill = hoursPlayed * table.hourlyRate;
+    if (table && table.startTime && table.player) {
+      const endTime = new Date();
+      const duration = (endTime.getTime() - table.startTime.getTime()) / (1000 * 60 * 60);
+      const tableCost = duration * table.hourlyRate;
+      const ordersCost = table.orders?.reduce((sum, order) => 
+        sum + (order.menuItem.price * order.quantity), 0) || 0;
+      const totalCost = tableCost + ordersCost;
+      
+      // Add to billing history
+      const billingRecord: BillingRecord = {
+        id: `${tableId}-${Date.now()}`,
+        tableId: table.id,
+        player: table.player,
+        startTime: table.startTime,
+        endTime,
+        duration,
+        hourlyRate: table.hourlyRate,
+        tableCost,
+        orders: table.orders || [],
+        ordersCost,
+        totalCost,
+        timestamp: endTime
+      };
+      
+      setBillingHistory(prev => [billingRecord, ...prev]);
       
       setTables(prev => prev.map(t => 
         t.id === tableId 
-          ? { ...t, status: 'available' as const, player: undefined, startTime: undefined, currentBill: undefined }
+          ? { ...t, status: 'available' as const, player: undefined, startTime: undefined, currentBill: undefined, orders: [] }
           : t
       ));
       
       toast({
         title: "Game Ended",
-        description: `${table.player}'s final bill: $${finalBill.toFixed(2)}`,
+        description: `${table.player}'s final bill: $${totalCost.toFixed(2)}`,
       });
     }
   };
@@ -80,6 +127,35 @@ const Index = () => {
       description: `Table ${tableId} has been ${table?.status === 'reserved' ? 'made available' : 'reserved'}`,
     });
   };
+
+  const handleAddOrder = (tableId: number, menuItem: MenuItem, quantity: number) => {
+    const newOrder: Order = {
+      id: `${tableId}-${menuItem.id}-${Date.now()}`,
+      menuItemId: menuItem.id,
+      menuItem,
+      quantity,
+      status: 'pending',
+      timestamp: new Date()
+    };
+
+    setTables(prev => prev.map(table => 
+      table.id === tableId 
+        ? { ...table, orders: [...(table.orders || []), newOrder] }
+        : table
+    ));
+
+    toast({
+      title: "Order Added",
+      description: `${quantity}x ${menuItem.name} added to Table ${tableId}`,
+    });
+  };
+
+  const handleOpenMenu = (tableId: number) => {
+    // This will be handled by the FoodMenu component
+    return;
+  };
+
+  const occupiedTables = tables.filter(t => t.status === 'occupied').map(t => t.id);
 
   return (
     <div className="min-h-screen bg-background">
@@ -111,9 +187,18 @@ const Index = () => {
         
         {/* Tables Grid */}
         <div className="space-y-6">
-          <h3 className="text-2xl font-bold text-foreground mb-6">
-            Table Status
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-2xl font-bold text-foreground">
+              Table Status
+            </h3>
+            <div className="flex gap-4">
+              <FoodMenu 
+                onAddOrder={handleAddOrder} 
+                availableTables={occupiedTables}
+              />
+              <BillingHistory billingHistory={billingHistory} />
+            </div>
+          </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {tables.map((table) => (
@@ -123,6 +208,7 @@ const Index = () => {
                 onStartGame={handleStartGame}
                 onEndGame={handleEndGame}
                 onReserveTable={handleReserveTable}
+                onOpenMenu={handleOpenMenu}
               />
             ))}
           </div>

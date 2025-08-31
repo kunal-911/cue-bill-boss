@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DollarSign, Clock, Users, TrendingUp } from "lucide-react";
-import { Table } from "./TableCard";
+import { Table } from "@/types";
 
 interface BillingOverviewProps {
   tables: Table[];
@@ -10,11 +10,14 @@ interface BillingOverviewProps {
 export const BillingOverview = ({ tables }: BillingOverviewProps) => {
   const occupiedTables = tables.filter(t => t.status === 'occupied');
   const totalRevenue = occupiedTables.reduce((sum, table) => {
+    let tableCost = 0;
     if (table.startTime) {
       const hoursPlayed = (new Date().getTime() - table.startTime.getTime()) / (1000 * 60 * 60);
-      return sum + (hoursPlayed * table.hourlyRate);
+      tableCost = hoursPlayed * table.hourlyRate;
     }
-    return sum;
+    const ordersCost = table.orders?.reduce((orderSum, order) => 
+      orderSum + (order.menuItem.price * order.quantity), 0) || 0;
+    return sum + tableCost + ordersCost;
   }, 0);
 
   const totalActivePlayers = occupiedTables.length;

@@ -1,26 +1,19 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Timer } from "lucide-react";
+import { Timer, ShoppingCart, Utensils } from "lucide-react";
 import { useState, useEffect } from "react";
-
-export interface Table {
-  id: number;
-  status: 'available' | 'occupied' | 'reserved';
-  player?: string;
-  startTime?: Date;
-  hourlyRate: number;
-  currentBill?: number;
-}
+import { Table, Order } from "@/types";
 
 interface TableCardProps {
   table: Table;
   onStartGame: (tableId: number, playerName: string) => void;
   onEndGame: (tableId: number) => void;
   onReserveTable: (tableId: number) => void;
+  onOpenMenu: (tableId: number) => void;
 }
 
-export const TableCard = ({ table, onStartGame, onEndGame, onReserveTable }: TableCardProps) => {
+export const TableCard = ({ table, onStartGame, onEndGame, onReserveTable, onOpenMenu }: TableCardProps) => {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [playerName, setPlayerName] = useState("");
 
@@ -44,11 +37,16 @@ export const TableCard = ({ table, onStartGame, onEndGame, onReserveTable }: Tab
   };
 
   const calculateCurrentBill = () => {
+    let tableCost = 0;
     if (table.status === 'occupied' && table.startTime) {
       const hoursPlayed = elapsedTime / 3600;
-      return hoursPlayed * table.hourlyRate;
+      tableCost = hoursPlayed * table.hourlyRate;
     }
-    return 0;
+    
+    const ordersCost = table.orders?.reduce((sum, order) => 
+      sum + (order.menuItem.price * order.quantity), 0) || 0;
+    
+    return tableCost + ordersCost;
   };
 
   const getStatusColor = () => {
@@ -92,13 +90,31 @@ export const TableCard = ({ table, onStartGame, onEndGame, onReserveTable }: Tab
               <div className="text-lg font-bold text-billiards-gold">
                 Current Bill: ${calculateCurrentBill().toFixed(2)}
               </div>
+              {table.orders && table.orders.length > 0 && (
+                <div className="text-sm space-y-1">
+                  <div className="flex items-center gap-2 text-billiards-felt">
+                    <Utensils className="h-4 w-4" />
+                    <span>Orders: {table.orders.length} items</span>
+                  </div>
+                </div>
+              )}
             </div>
-            <Button 
-              onClick={() => onEndGame(table.id)}
-              className="w-full bg-gradient-to-r from-destructive to-destructive/80 hover:from-destructive/90 hover:to-destructive/70"
-            >
-              End Game
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                onClick={() => onOpenMenu(table.id)}
+                variant="outline"
+                className="flex-1 border-billiards-gold text-billiards-gold hover:bg-billiards-gold hover:text-primary-foreground"
+              >
+                <ShoppingCart className="mr-2 h-4 w-4" />
+                Order
+              </Button>
+              <Button 
+                onClick={() => onEndGame(table.id)}
+                className="flex-1 bg-gradient-to-r from-destructive to-destructive/80 hover:from-destructive/90 hover:to-destructive/70"
+              >
+                End Game
+              </Button>
+            </div>
           </>
         )}
 
